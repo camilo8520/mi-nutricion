@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mi Nutrición</title>
+<meta name="theme-color" content="#0b6e5c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Mi Nutrición">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header id="top"></header>
+  <main id="view"></main>
+</div>
+<nav id="tabs">
+  <button data-tab="hoy" class="on"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>Hoy</button>
+  <button data-tab="hist"><svg viewBox="0 0 24 24"><path d="M5 20V11M12 20V5M19 20v-6"/></svg>Historial</button>
+  <button data-tab="ajustes"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Ajustes</button>
+</nav>
+<button id="fab" aria-label="Añadir alimento"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Añadir</span></button>
+<div id="sheet" hidden>
+  <div class="scrim" data-act="close-sheet"></div>
+  <div class="panel" id="panel" role="dialog" aria-modal="true"></div>
+</div>
+<div id="toast" hidden></div>
+<input type="file" id="xlsxIn" accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+<input type="file" id="jsonIn" accept=".json,application/json" hidden>
+<script src="datos.js"></script>
+<script src="xlsx.mini.min.js"></script>
+<script src="excel.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
