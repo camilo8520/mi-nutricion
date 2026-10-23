@@ -51,10 +51,11 @@
     if (hi < 0) throw new Error('No encuentro la fila de títulos («Alimento…») en la Base de datos.');
     const head = rowsB[hi];
     const nutrients = [];
-    let srcCol = -1;
+    let srcCol = -1, emoCol = -1;
     for (let c = 1; c < head.length; c++) {
       if (head[c] == null || head[c] === '') continue;
       if (norm(head[c]) === 'fuente') { srcCol = c; continue; }
+      if (norm(head[c]) === 'emoji') { emoCol = c; continue; }
       const label = String(head[c]).trim();
       const m = label.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
       nutrients.push({ col: c, key: norm(label), label, short: (m ? m[1] : label).trim(), unit: m ? m[2] : '' });
@@ -67,7 +68,7 @@
       const p = parseName(full);
       const per100 = {};
       nutrients.forEach(n => { per100[n.key] = num(row[n.col]) || 0; });
-      foods.push({ id: full, name: p.name, portions: p.portions, per100, source: srcCol >= 0 && row[srcCol] ? String(row[srcCol]) : '' });
+      foods.push({ id: full, name: p.name, emoji: emoCol >= 0 && row[emoCol] ? String(row[emoCol]).trim() : '', portions: p.portions, per100, source: srcCol >= 0 && row[srcCol] ? String(row[srcCol]) : '' });
     }
 
     // Categorías y orden: hoja «Mi día» (filas «▸ …»)

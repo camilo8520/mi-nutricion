@@ -62,6 +62,19 @@ const met = (t) => DATA.goals.filter(g => statusOf(g, t[g.key] || 0) === 'ok').l
 const PROT = () => DATA.goals.find(g => g.key.startsWith('proteina'));
 const KCAL = () => DATA.goals.find(g => g.key.startsWith('calorias'));
 
+
+/* ---------- emojis (columna «Emoji» del Excel si existe; si no, por palabra clave) ---------- */
+const EMO_KEYS = [['toning','🥛'],['bebida de soya','🥛'],['carve','🌱'],['texturizada','🌱'],['harina de soya','🫘'],['seitan','🥩'],['tofu','🧊'],['verduras verdes','🥬'],['espinaca','🥬'],['verduras acuosas','🍅'],['tomate','🍅'],['zanahoria','🥕'],['ahuyama','🎃'],['banano','🍌'],['manzana','🍎'],['naranja','🍊'],['mango','🥭'],['papaya','🍈'],['fresa','🍓'],['avena','🥣'],['arroz','🍚'],['pasta','🍝'],['quinua','🌾'],['arepa','🫓'],['pan ','🍞'],['lenteja','🫘'],['frijol','🫘'],['garbanzo','🫘'],['arveja','🫛'],['mani','🥜'],['nuez','🌰'],['calabaza','🌱'],['chia','🌱'],['linaza','🌾'],['papa','🥔'],['aguacate','🥑'],['aceite','🫒'],['cafe','☕']];
+const EMO_CAT = { 'proteina': '💪', 'verduras y frutas': '🥗', 'cereales': '🌾', 'legumbres': '🫘', 'nueces y semillas': '🥜', 'otros': '🍽️' };
+function emo(f) {
+  if (!f) return '🍽️';
+  if (f.emoji) return f.emoji;
+  const n = NutriExcel.norm(f.name || f.id) + ' ';
+  for (const [k, v] of EMO_KEYS) if (n.includes(k)) return v;
+  return EMO_CAT[NutriExcel.norm(f.cat || 'otros')] || '🍽️';
+}
+const label = f => emo(f) + ' ' + f.name.split(':')[0];
+
 /* ---------- porciones ---------- */
 function plural(unit, q) {
   if (q <= 1) return unit;
@@ -168,7 +181,7 @@ function suggestCard(entries, k) {
   const items = r.picks.map((p, i) => {
     const bits = g0.map(g => ({ g, v: p.add[g.key] })).filter(x => x.v / x.g.min > .06).sort((a, b) => b.v / b.g.min - a.v / a.g.min).slice(0, 3)
       .map(x => '+' + fnum(x.v, x.v < 10 ? 1 : 0) + ' ' + x.g.unit.replace(/^kcal$/, 'kcal') + ' ' + x.g.short.toLowerCase().replace('proteína', 'prot.').replace('calorías', ''));
-    return '<div class="item"><div class="t"><b>' + esc(p.f.name.split(':')[0]) + '</b><span>' + esc(describe(p.f, p.g)) + (bits.length ? ' · ' + esc(bits.join(' · ').replace(/\s+/g, ' ')) : '') + '</span></div><button class="addbtn" data-act="sug-add" data-i="' + i + '" aria-label="Añadir ' + esc(p.f.name) + '">' + ICON.plus + '</button></div>';
+    return '<div class="item"><div class="t"><b>' + esc(label(p.f)) + '</b><span>' + esc(describe(p.f, p.g)) + (bits.length ? ' · ' + esc(bits.join(' · ').replace(/\s+/g, ' ')) : '') + '</span></div><button class="addbtn" data-act="sug-add" data-i="' + i + '" aria-label="Añadir ' + esc(p.f.name) + '">' + ICON.plus + '</button></div>';
   }).join('');
   suggestCard.last = r;
   const after = r.left.length ? 'Con esto quedaría pendiente: ' + r.left.map(g => g.short.toLowerCase()).join(', ') + '.' : 'Con esto cumples todos los mínimos del día.';
@@ -232,7 +245,7 @@ function viewHoy() {
     [...entries].sort((a, b) => a.t - b.t).forEach(e => {
       const f = food(e.food); const tm = new Date(e.t);
       const P0 = f && P ? (f.per100[P.key] || 0) * e.g / 100 : 0;
-      h += '<button class="entry" data-act="edit" data-id="' + e.id + '"><span class="tm num">' + tm.getHours() + ':' + String(tm.getMinutes()).padStart(2, '0') + '</span><span class="t"><b>' + esc(f ? f.name.split(':')[0] : e.food + ' (ya no está en el Excel)') + '</b><span>' + esc(f ? describe(f, e.g) : fnum(e.g) + ' g') + '</span></span><span class="p num">' + fnum(P0, 1) + ' g<small>proteína</small></span></button>';
+      h += '<button class="entry" data-act="edit" data-id="' + e.id + '"><span class="tm num">' + tm.getHours() + ':' + String(tm.getMinutes()).padStart(2, '0') + '</span><span class="t"><b>' + esc(f ? label(f) : e.food + ' (ya no está en el Excel)') + '</b><span>' + esc(f ? describe(f, e.g) : fnum(e.g) + ' g') + '</span></span><span class="p num">' + fnum(P0, 1) + ' g<small>proteína</small></span></button>';
     });
     const prev = prevDay();
     if (prev && date === today()) h += '<div class="btnrow"><button class="linkbtn" data-act="copy-prev">+ Copiar lo de ' + esc(dlabel(prev)) + '</button></div>';
@@ -277,7 +290,7 @@ function viewAjustes() {
     '<ol class="how" style="margin-top:12px"><li>Edita <b>Calculadora_Nutricion_Camilo.xlsx</b> y guarda.</li><li>Toca el botón y elige el archivo desde OneDrive.</li><li>Listo: alimentos, medidas, nutrientes y metas se actualizan. Tu registro no se toca.</li></ol><div id="diff"></div></section>' +
     '<section class="card set"><h3>Apariencia</h3><div class="seg" style="margin-top:8px">' + [['auto', 'Automática'], ['light', 'Clara'], ['dark', 'Oscura']].map(([v, l]) => '<button data-act="theme" data-v="' + v + '" class="' + (SET.theme === v ? 'on' : '') + '">' + l + '</button>').join('') + '</div></section>' +
     '<section class="card set"><h3>Aviso de las 4 PM</h3><p>Después de las 4:00 PM la app te muestra qué te falta para cerrar el día. Para que el iPhone te avise solo: en la app Atajos crea una automatización «Hora del día · 4:00 PM» con la acción «Abrir app» (Mi Nutrición).</p></section>' +
-    '<section class="card set"><h3>Copia de seguridad</h3><p>Tu registro vive en este teléfono. Guarda una copia de vez en cuando.</p><div class="btnrow" style="margin:0;justify-content:flex-start"><button class="btn ghost" data-act="export">Exportar registro</button><button class="btn ghost" data-act="pick-json">Importar copia</button></div></section>';
+    '<section class="card set"><h3>Copia de seguridad</h3><p>Tu registro vive en este teléfono. ' + (SET.backup ? 'Última copia: ' + esc(dlabel(dkey(new Date(SET.backup)))) + '.' : 'Aún no has guardado ninguna copia.') + '</p><div class="btnrow" style="margin:0;justify-content:flex-start"><button class="btn ghost" data-act="export">Exportar registro</button><button class="btn ghost" data-act="pick-json">Importar copia</button></div></section>';
 }
 
 function render() {
@@ -304,14 +317,14 @@ function renderSheet() {
     }
     const t = totals(entriesOf(date)), P = PROT();
     p.innerHTML = '<div class="grab"></div><div class="ph"><h2>Añadir alimento</h2><button class="x" data-act="close-sheet" aria-label="Cerrar">' + ICON.x + '</button></div>' +
-      '<input class="search" id="q" type="search" placeholder="Buscar: avena, seitán, banano…" value="' + esc(sheet.q || '') + '" autocomplete="off">' +
+      '<input class="search" id="q" type="search" placeholder="Busca o escribe: 2 bananos y 100 g de seitán" value="' + esc(sheet.q || '') + '" autocomplete="off">' +
       (q ? '' : '<div class="chips">' + cats.map(c => '<button class="chip' + (c === cur ? ' on' : '') + '" data-act="cat" data-c="' + esc(c) + '">' + esc(c) + '</button>').join('') + '</div>') +
       '<div class="list">' + (foods.length ? foods.map(f => {
         const g = usualG(f);
-        return '<div class="food"><button class="t" data-act="pick" data-id="' + esc(f.id) + '"><b>' + esc(f.name) + '</b><span>' + esc(describe(f, g)) + ' · ' + fnum((f.per100[P ? P.key : ''] || 0) * g / 100, 1) + ' g prot.</span></button><button class="addbtn" data-act="quick" data-id="' + esc(f.id) + '" aria-label="Añadir ' + esc(describe(f, g)) + '">' + ICON.plus + '</button></div>';
+        return '<div class="food"><button class="t" data-act="pick" data-id="' + esc(f.id) + '"><b>' + esc(emo(f) + ' ' + f.name) + '</b><span>' + esc(describe(f, g)) + ' · ' + fnum((f.per100[P ? P.key : ''] || 0) * g / 100, 1) + ' g prot.</span></button><button class="addbtn" data-act="quick" data-id="' + esc(f.id) + '" aria-label="Añadir ' + esc(describe(f, g)) + '">' + ICON.plus + '</button></div>';
       }).join('') : '<div class="empty">No encuentro «' + esc(sheet.q) + '» en tu Excel.<br>Agrégalo en la Base de datos y actualiza la app.</div>') + '</div>' +
       '<div class="sumbar"><span>Proteína del día: <b class="num">' + fnum(P ? t[P.key] : 0) + ' / ' + fnum(P ? P.min : 0) + ' g</b></span><button class="btn" data-act="close-sheet">Listo</button></div>';
-    const inp = $('#q'); inp.oninput = e => { sheet.q = e.target.value; const pos = e.target.selectionStart; renderSheet(); const n = $('#q'); n.focus(); n.setSelectionRange(pos, pos); };
+    const inp = $('#q'); inp.onkeydown = e => { if (e.key === 'Enter' && /\d|medio|media|un |una |dos |tres /i.test(e.target.value)) { const t = e.target.value; sheet.q = ''; if (addByText(t)) { renderSheet(); } } }; inp.oninput = e => { sheet.q = e.target.value; const pos = e.target.selectionStart; renderSheet(); const n = $('#q'); n.focus(); n.setSelectionRange(pos, pos); };
   } else {
     const f = food(sheet.food); if (!f) return closeSheet();
     const units = (f.portions || []);
@@ -403,7 +416,7 @@ $('#xlsxIn').onchange = async e => {
 /* ---------- copia de seguridad ---------- */
 function exportLog() {
   const blob = new Blob([JSON.stringify({ app: 'mi-nutricion', exported: new Date().toISOString(), log: LOG }, null, 1)], { type: 'application/json' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'mi-nutricion-' + today() + '.json'; document.body.appendChild(a); a.click(); a.remove();
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'mi-nutricion-' + today() + '.json'; document.body.appendChild(a); a.click(); a.remove(); SET.backup = new Date().toISOString(); saveSet(); setTimeout(render, 300);
 }
 $('#jsonIn').onchange = async e => {
   const file = e.target.files[0]; e.target.value = ''; if (!file) return;
@@ -427,6 +440,58 @@ render();
     if (pend.length) toast('Pasadas las 4 PM · te faltan ' + pend.length + ' objetivos. Mira las sugerencias arriba.');
   }
 })();
+
+/* ---------- comandos de texto o voz: «2 bananos y 100 g de seitán» ---------- */
+const NUMW = { un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, doce: 12 };
+const STOP = new Set(['de', 'del', 'la', 'el', 'los', 'las', 'y', 'con', 'mi', 'en', 'al', 'a', 'que', 'comi', 'agrega', 'agregar', 'anade', 'anadir', 'añade', 'añadir', 'registra', 'registrar', 'gramos', 'gramo', 'gr', 'g', 'porcion', 'porciones']);
+const sim = (a, b) => a === b || (Math.min(a.length, b.length) >= 4 && Math.abs(a.length - b.length) <= 2 && (a.startsWith(b) || b.startsWith(a)));
+const unitHit = (t, unit) => { const k = NutriExcel.norm(unit).split(' ')[0]; if (k === 'cda') return t.startsWith('cucharad') || t === 'cda' || t === 'cdas'; return sim(t, k); };
+const ALIAS = { leche: ['bebida', 'soya'], soja: ['soya'], frijol: ['frijoles'], cafe: ['cafe'] };
+function parseSegment(txt) {
+  const toks = NutriExcel.norm(txt).replace(/[^a-z0-9., ]/g, ' ').split(/\s+/).filter(Boolean);
+  let qty = null, grams = false; const words = [];
+  toks.forEach(t => {
+    if (/^\d+([.,]\d+)?$/.test(t)) qty = parseFloat(t.replace(',', '.'));
+    else if (t === 'medio' || t === 'media') qty = (qty || 0) + .5;
+    else if (NUMW[t] != null) qty = NUMW[t];
+    else { if (/^(gramos?|gr|g)$/.test(t)) grams = true; if (!STOP.has(t)) (ALIAS[t] || [t]).forEach(x => words.push(x)); }
+  });
+  if (!words.length) return null;
+  const scored = DATA.foods.map(f => {
+    const nt = NutriExcel.norm(f.name).split(/[\s,:/]+/).filter(Boolean);
+    const hit = words.filter(w => nt.some(n => sim(w, n))).length;
+    return { f, hit, len: nt.length };
+  }).filter(x => x.hit > 0).sort((a, b) => b.hit - a.hit || a.len - b.len);
+  if (!scored.length) return { fail: txt.trim() };
+  const f = scored[0].f; let g;
+  const unitTok = words.find(w => (f.portions || []).some(p => unitHit(w, p.unit)));
+  if (grams && qty != null) g = qty;
+  else if (unitTok) { const p = f.portions.find(p => unitHit(unitTok, p.unit)); g = (qty == null ? 1 : qty) * p.perUnit; }
+  else if (qty != null && f.portions && f.portions.length) g = qty * f.portions[0].perUnit;
+  else if (qty != null) g = qty >= 10 ? qty : qty * 100;
+  else g = usualG(f);
+  return { f, g: rnd(g, 1) };
+}
+function addByText(text) {
+  const segs = NutriExcel.norm(text).split(/,| y (?!medio|media)| mas | con /).map(s => s.trim()).filter(Boolean);
+  const added = [], fails = [];
+  if (date !== today()) date = today();
+  segs.forEach(s => { const r = parseSegment(s); if (!r) return; if (r.fail) fails.push(r.fail); else added.push({ r, e: addEntry(r.f.id, r.g, today(), true) }); });
+  const P = PROT(); const tot = totals(entriesOf(today()));
+  if (added.length) {
+    const msg = '✓ ' + added.map(x => emo(x.r.f) + ' ' + x.r.f.name.split(':')[0] + ' ' + fnum(x.r.g) + ' g').join(', ') + (P ? ' · proteína ' + fnum(tot[P.key]) + '/' + fnum(P.min) + ' g' : '');
+    toast(msg, () => { added.forEach(x => { LOG[today()] = (LOG[today()] || []).filter(e => e.id !== x.e.id); }); saveLog(); render(); });
+  }
+  if (fails.length) { tab = 'hoy'; render(); openSheet({ mode: 'list', cat: 'Frecuentes', q: fails.join(' ') }); if (!added.length) toast('No encontré «' + fails.join(', ') + '» en tu Excel'); }
+  return added.length;
+}
+(function () {
+  try {
+    const q = new URLSearchParams(location.search).get('add');
+    if (q) { tab = 'hoy'; setTimeout(() => addByText(q), 50); history.replaceState(null, '', location.pathname); }
+  } catch (e) {}
+})();
+
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
-window.__app = { get DATA() { return DATA; }, get LOG() { return LOG; }, totals, suggest, entriesOf, addEntry };
+window.__app = { addByText, get DATA() { return DATA; }, get LOG() { return LOG; }, totals, suggest, entriesOf, addEntry };
 })();

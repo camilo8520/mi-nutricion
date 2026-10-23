@@ -58,7 +58,7 @@ svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-lin
 .muted{color:var(--ink2)}
 .bar{position:relative;height:10px;border-radius:6px;background:var(--track);margin-top:7px;overflow:hidden}
 .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:6px;background:var(--accent);transition:width .4s}
-.bar.low i{background:var(--ink2)}
+.bar.low i{background:var(--warn)}
 .bar.over i{background:var(--bad)}
 .bar.ok i{background:var(--accent)}
 .bar u{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink);opacity:.55}
@@ -180,7 +180,7 @@ ol.how{margin:0;padding-left:20px;color:var(--ink2);font-size:.88rem}
 ol.how li{margin:3px 0}
 .diff{font-size:.88rem;margin:6px 0 0;padding-left:18px}
 
-#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(144px + env(safe-area-inset-bottom,0px));z-index:30;background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:14px;display:flex;gap:14px;align-items:center;font-weight:600;max-width:92vw;font-size:.92rem;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+#toast{position:fixed;left:50%;transform:translateX(-50%);width:max-content;bottom:calc(144px + env(safe-area-inset-bottom,0px));z-index:30;background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:14px;display:flex;gap:14px;align-items:center;font-weight:600;max-width:92vw;font-size:.92rem;box-shadow:0 8px 24px rgba(0,0,0,.3)}
 #toast button{color:var(--accent);font-weight:800;filter:brightness(1.25)}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
