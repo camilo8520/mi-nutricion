@@ -20,6 +20,7 @@ let DATA = store.get('nutri.data', null) || window.DATOS_INICIALES;
 let LOG = store.get('nutri.log', {});
 let ARCH = store.get('nutri.archive', {});
 let SET = store.get('nutri.set', { theme: 'auto', shown: '' });
+let HAB = store.get('nutri.hab', {});
 let tab = 'hoy';
 let date = dkey(new Date());
 let openGoal = null;
@@ -31,6 +32,7 @@ function fromKey(k) { const [y, m, d] = k.split('-').map(Number); return new Dat
 const today = () => dkey(new Date());
 const saveLog = () => store.set('nutri.log', LOG);
 const saveSet = () => store.set('nutri.set', SET);
+const saveHab = () => store.set('nutri.hab', HAB);
 const rnd = (v, d = 0) => { const f = Math.pow(10, d); return Math.round(v * f) / f; };
 const fnum = (v, d = 0) => rnd(v, d).toLocaleString('es-CO', { maximumFractionDigits: d });
 
@@ -98,6 +100,7 @@ function usualG(f) {
   const p = f.portions && f.portions[0];
   return p ? rnd(p.perUnit * p.qty, 1) : 100;
 }
+function quickG(f) { const p = f.portions && f.portions[0]; if (p) return rnd(p.perUnit, 1); const u = usualG(f); return u; }
 function freq(id) { let c = 0; const ks = Object.keys(LOG).sort().reverse().slice(0, 14); ks.forEach(k => LOG[k].forEach(e => { if (e.food === id) c++; })); return c; }
 
 /* ---------- registro ---------- */
@@ -188,6 +191,28 @@ function suggestCard(entries, k) {
   return '<section class="card sug"><h3>' + esc(hdr) + '</h3><p class="lead">' + esc(lead) + '</p>' + (items ? '<div>' + items + '</div><p class="after">' + esc(after) + '</p>' : '<p class="after">No encuentro una combinación sencilla con tus alimentos para cubrir lo que falta.</p>') + '</section>';
 }
 
+
+/* ---------- hábitos del día ---------- */
+const habitsOn = k => (DATA.habits || []).filter(h => !h.days || h.days.includes(fromKey(k).getDay()));
+const habDone = (k, id) => !!(HAB[k] && HAB[k][id]);
+function toggleHab(id, k = date) {
+  HAB[k] = HAB[k] || {};
+  if (HAB[k][id]) delete HAB[k][id]; else { const d = new Date(); if (k !== today()) { const x = fromKey(k); x.setHours(12, 0, 0, 0); HAB[k][id] = x.getTime(); } else HAB[k][id] = d.getTime(); }
+  if (!Object.keys(HAB[k]).length) delete HAB[k];
+  saveHab(); render();
+}
+function habCard(k) {
+  const H = habitsOn(k);
+  if (!(DATA.habits || []).length) return '<section class="card"><div class="row"><b>Mi día</b></div><p class="muted" style="margin:6px 0 10px;font-size:.9rem">Aquí aparecen tus hábitos (pastillas, meditación, ejercicio…). Cárgalos desde la hoja «Hábitos» de tu Excel.</p><button class="btn block" data-act="pick-xlsx">Actualizar desde el Excel</button></section>';
+  if (!H.length) return '';
+  const done = H.filter(x => habDone(k, x.id)).length, pend = H.filter(x => !habDone(k, x.id));
+  const late = k === today() && new Date().getHours() >= 16 && pend.length;
+  return '<section class="card habs"><div class="row"><b>Mi día</b><span class="num ' + (done === H.length ? 'okc' : 'muted') + '">' + (done === H.length ? 'Todo hecho ✓' : done + ' de ' + H.length + ' hechos') + '</span></div>' +
+    (late ? '<p class="late">Faltan: ' + esc(pend.map(x => x.name).join(', ')) + '</p>' : '') +
+    H.map(x => { const ts = HAB[k] && HAB[k][x.id]; const d = ts ? new Date(ts) : null;
+      return '<button class="hab' + (ts ? ' on' : '') + '" data-act="hab" data-id="' + esc(x.id) + '"><span class="ck">' + (ts ? ICON.check : '') + '</span><span class="t"><b>' + esc((x.emoji ? x.emoji + ' ' : '') + x.name) + '</b>' + (x.note ? '<span>' + esc(x.note) + '</span>' : '') + '</span><span class="tm num">' + (d ? d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0') : '') + '</span></button>'; }).join('') + '</section>';
+}
+
 /* ---------- vistas ---------- */
 const DAYN = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'], MON = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 function dlabel(k) { const d = fromKey(k); return DAYN[d.getDay()] + ' ' + d.getDate() + ' ' + MON[d.getMonth()]; }
@@ -216,6 +241,7 @@ function viewHoy() {
     }
     h += '</section>';
   }
+  h += habCard(date);
   const hour = new Date().getHours();
   if (date === today() && hour >= 16) h += suggestCard(entries, date);
   else if (entries.length || date !== today()) h += '';
@@ -266,7 +292,7 @@ function sourcesOf(g) {
 }
 
 function viewHist() {
-  const ks = Object.keys(LOG).filter(k => LOG[k].length).sort().reverse();
+  const ks = [...new Set([...Object.keys(LOG).filter(k => LOG[k].length), ...Object.keys(HAB)])].sort().reverse();
   const P = PROT();
   if (!ks.length) return '<section class="card"><div class="empty"><b>Aún no hay días registrados</b>Cuando registres comidas, aquí verás cómo vas día a día.</div></section>';
   const days = [];
@@ -275,9 +301,9 @@ function viewHist() {
   const last14 = days.slice(0, 14); const okP = P ? last14.filter(k => totals(entriesOf(k))[P.key] >= P.min).length : 0;
   let h = '<div class="stat"><div><b class="num">' + streak + '</b><span>días seguidos con proteína cumplida</span></div><div><b class="num">' + okP + '/14</b><span>días con proteína en 2 semanas</span></div></div><section class="card">';
   ks.slice(0, 60).forEach(k => {
-    const t = totals(LOG[k]); const pv = P ? t[P.key] : 0; const pct = P ? Math.min(100, pv / P.min * 100) : 0;
+    const t = totals(entriesOf(k)); const hs = habitsOn(k); const hd = hs.filter(x => habDone(k, x.id)).length; const pv = P ? t[P.key] : 0; const pct = P ? Math.min(100, pv / P.min * 100) : 0;
     const st = P ? statusOf(P, pv) : 'ok';
-    h += '<button class="day" data-act="goto" data-k="' + k + '"><div class="row"><b>' + esc(dlabel(k)) + '</b><span class="num tiny">' + fnum(P ? pv : 0) + ' g prot. · ' + fnum(t[KCAL() ? KCAL().key : ''] || 0) + ' kcal · ' + met(t) + '/' + DATA.goals.length + ' objetivos</span></div><div class="bar ' + st + '"><i style="width:' + pct + '%"></i></div></button>';
+    h += '<button class="day" data-act="goto" data-k="' + k + '"><div class="row"><b>' + esc(dlabel(k)) + '</b><span class="num tiny">' + fnum(P ? pv : 0) + ' g prot. · ' + fnum(t[KCAL() ? KCAL().key : ''] || 0) + ' kcal · ' + met(t) + '/' + DATA.goals.length + ' objetivos' + (hs.length ? ' · hábitos ' + hd + '/' + hs.length : '') + '</span></div><div class="bar ' + st + '"><i style="width:' + pct + '%"></i></div></button>';
   });
   return h + '</section>';
 }
@@ -285,9 +311,10 @@ function viewHist() {
 function viewAjustes() {
   const d = new Date(DATA.importedAt);
   const demo = DATA === window.DATOS_INICIALES;
-  return '<section class="card set"><h3>Datos del Excel</h3><p>' + DATA.foods.length + ' alimentos · ' + DATA.nutrients.length + ' nutrientes · ' + DATA.goals.length + ' objetivos.<br>' + (demo ? 'Datos incluidos con la app.' : 'Actualizado el ' + esc(dlabel(dkey(d))) + ' a las ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0')) + '</p>' +
+  return '<section class="card set"><h3>Datos del Excel</h3><p>' + DATA.foods.length + ' alimentos · ' + DATA.nutrients.length + ' nutrientes · ' + DATA.goals.length + ' objetivos' + ((DATA.habits || []).length ? ' · ' + DATA.habits.length + ' hábitos' : '') + '.<br>' + (demo ? 'Datos incluidos con la app.' : 'Actualizado el ' + esc(dlabel(dkey(d))) + ' a las ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0')) + '</p>' +
     '<button class="btn block" data-act="pick-xlsx">Actualizar desde el Excel</button>' +
     '<ol class="how" style="margin-top:12px"><li>Edita <b>Calculadora_Nutricion_Camilo.xlsx</b> y guarda.</li><li>Toca el botón y elige el archivo desde OneDrive.</li><li>Listo: alimentos, medidas, nutrientes y metas se actualizan. Tu registro no se toca.</li></ol><div id="diff"></div></section>' +
+    '<section class="card set"><h3>Modo báscula</h3><p>Al elegir un alimento, la app abre directo en gramos con el teclado listo para que escribas lo que marca tu báscula.</p><div class="seg"><button data-act="scale" class="' + (SET.scale ? '' : 'on') + '">Apagado</button><button data-act="scale" class="' + (SET.scale ? 'on' : '') + '">Encendido</button></div></section>' +
     '<section class="card set"><h3>Apariencia</h3><div class="seg" style="margin-top:8px">' + [['auto', 'Automática'], ['light', 'Clara'], ['dark', 'Oscura']].map(([v, l]) => '<button data-act="theme" data-v="' + v + '" class="' + (SET.theme === v ? 'on' : '') + '">' + l + '</button>').join('') + '</div></section>' +
     '<section class="card set"><h3>Aviso de las 4 PM</h3><p>Después de las 4:00 PM la app te muestra qué te falta para cerrar el día. Para que el iPhone te avise solo: en la app Atajos crea una automatización «Hora del día · 4:00 PM» con la acción «Abrir app» (Mi Nutrición).</p></section>' +
     '<section class="card set"><h3>Copia de seguridad</h3><p>Tu registro vive en este teléfono. ' + (SET.backup ? 'Última copia: ' + esc(dlabel(dkey(new Date(SET.backup)))) + '.' : 'Aún no has guardado ninguna copia.') + '</p><div class="btnrow" style="margin:0;justify-content:flex-start"><button class="btn ghost" data-act="export">Exportar registro</button><button class="btn ghost" data-act="pick-json">Importar copia</button></div></section>';
@@ -320,7 +347,7 @@ function renderSheet() {
       '<input class="search" id="q" type="search" placeholder="Busca o escribe: 2 bananos y 100 g de seitán" value="' + esc(sheet.q || '') + '" autocomplete="off">' +
       (q ? '' : '<div class="chips">' + cats.map(c => '<button class="chip' + (c === cur ? ' on' : '') + '" data-act="cat" data-c="' + esc(c) + '">' + esc(c) + '</button>').join('') + '</div>') +
       '<div class="list">' + (foods.length ? foods.map(f => {
-        const g = usualG(f);
+        const g = quickG(f);
         return '<div class="food"><button class="t" data-act="pick" data-id="' + esc(f.id) + '"><b>' + esc(emo(f) + ' ' + f.name) + '</b><span>' + esc(describe(f, g)) + ' · ' + fnum((f.per100[P ? P.key : ''] || 0) * g / 100, 1) + ' g prot.</span></button><button class="addbtn" data-act="quick" data-id="' + esc(f.id) + '" aria-label="Añadir ' + esc(describe(f, g)) + '">' + ICON.plus + '</button></div>';
       }).join('') : '<div class="empty">No encuentro «' + esc(sheet.q) + '» en tu Excel.<br>Agrégalo en la Base de datos y actualiza la app.</div>') + '</div>' +
       '<div class="sumbar"><span>Proteína del día: <b class="num">' + fnum(P ? t[P.key] : 0) + ' / ' + fnum(P ? P.min : 0) + ' g</b></span><button class="btn" data-act="close-sheet">Listo</button></div>';
@@ -336,22 +363,25 @@ function renderSheet() {
     const mac = DATA.nutrients.filter(n => /^(proteina|carbohidratos|grasa|calorias)/.test(n.key)).slice(0, 4);
     p.innerHTML = '<div class="grab"></div><div class="ph"><h2>' + esc(f.name.split(':')[0]) + '</h2><button class="x" data-act="' + (sheet.edit ? 'close-sheet' : 'back') + '" aria-label="Volver">' + (sheet.edit ? ICON.x : ICON.left) + '</button></div>' +
       '<div class="unitchips">' + units.map((x, i) => '<button class="chip' + (sheet.unit === i ? ' on' : '') + '" data-act="unit" data-i="' + i + '">' + esc(plural(x.unit, 2).replace(/^(.)/, c => c)) + '</button>').join('') + '<button class="chip' + (sheet.unit < 0 ? ' on' : '') + '" data-act="unit" data-i="-1">gramos</button></div>' +
-      '<div class="stepper"><button data-act="step" data-d="-1" aria-label="Menos">' + ICON.minus + '</button><input id="qty" type="text" inputmode="decimal" value="' + esc(String(rnd(sheet.qty, 2)).replace('.', ',')) + '" aria-label="Cantidad"><button data-act="step" data-d="1" aria-label="Más">' + ICON.plus + '</button></div>' +
-      (u ? '' : '<div class="presets">' + [50, 100, 150, 200, 300].map(x => '<button class="chip" data-act="setg" data-g="' + x + '">' + x + ' g</button>').join('') + '</div>') + '<p class="eq num">' + (u ? esc(plural(u.unit, sheet.qty)) + ' = ' : '') + fnum(grams, 1) + ' g</p>' +
+      '<div class="stepper"><button data-act="step" data-d="-1" aria-label="Menos">' + ICON.minus + '</button><input id="qty" type="text" inputmode="decimal" value="' + (sheet.blank && !sheet.qty ? '' : esc(String(rnd(sheet.qty, 2)).replace('.', ','))) + '" onfocus="this.select()" placeholder="0" aria-label="Cantidad"><button data-act="step" data-d="1" aria-label="Más">' + ICON.plus + '</button></div>' +
+      (u ? '' : '<div class="presets">' + [50, 100, 150, 200, 300].map(x => '<button class="chip" data-act="setg" data-g="' + x + '">' + x + ' g</button>').join('') + '</div>') + '<p class="eq num">' + (u ? esc(plural(u.unit, sheet.qty)) + ' = ' : '') + fnum(grams, 1) + ' g</p>' + (u && /taza/.test(u.unit) ? '<p class="tiny" style="text-align:center;margin:0 0 8px">1 taza = 240 mL (8 oz), llena al ras.</p>' : '') +
       '<div class="macro">' + mac.map(n => '<div><b class="num">' + fnum(val(n.key), val(n.key) < 10 ? 1 : 0) + '</b><span>' + esc(n.short.toLowerCase().replace('carbohidratos', 'carbos')) + (n.unit === 'kcal' ? '' : ' (' + esc(n.unit) + ')') + '</span></div>').join('') + '</div>' +
       (sheet.edit ? '<div class="btnrow" style="margin:0"><button class="btn bad" data-act="del">Eliminar</button><button class="btn" style="flex:1" data-act="save">Guardar</button></div>' : '<button class="btn block" data-act="add">Añadir al día</button>');
     sheet._step = step; sheet._grams = grams;
-    const qi = $('#qty'); qi.oninput = e => { const v = parseFloat(e.target.value.replace(',', '.')); sheet.qty = isNaN(v) ? 0 : v; updatePreview(); };
+    const qi = $('#qty'); qi.oninput = e => { const v = parseFloat(e.target.value.replace(',', '.')); sheet.qty = isNaN(v) ? 0 : v; sheet.blank = e.target.value === ''; updatePreview(); };
   }
 }
 function updatePreview() { const pos = document.activeElement && document.activeElement.id === 'qty'; const v = $('#qty').value; renderSheet(); if (pos) { const q = $('#qty'); q.focus(); q.value = v; q.setSelectionRange(v.length, v.length); } }
 
 function pickFood(id, edit) {
-  const f = food(id); const g = edit ? edit.g : usualG(f);
-  const units = f.portions || []; let ui = units.length ? 0 : -1, qty = g;
-  if (ui >= 0) { qty = rnd(g / units[0].perUnit, 2); if (!edit) qty = units[0].qty * (Math.abs(g - units[0].perUnit * units[0].qty) < .5 ? 1 : g / (units[0].perUnit * units[0].qty)); qty = rnd(g / units[0].perUnit, 2); }
-  sheet = { mode: 'detail', food: id, unit: ui, qty, edit: edit ? edit.id : null, from: sheet && sheet.mode === 'list' ? sheet : null };
+  const f = food(id); const units = f.portions || [];
+  let ui, qty, blank = false;
+  if (edit) { ui = units.length ? 0 : -1; qty = ui >= 0 ? rnd(edit.g / units[0].perUnit, 2) : edit.g; }
+  else if (SET.scale) { ui = -1; qty = 0; blank = true; }
+  else { ui = units.length ? 0 : -1; qty = 1; }
+  sheet = { mode: 'detail', food: id, unit: ui, qty, blank, edit: edit ? edit.id : null, from: sheet && sheet.mode === 'list' ? sheet : null };
   renderSheet();
+  if (blank) { const q = $('#qty'); if (q) q.focus(); }
 }
 
 /* ---------- eventos ---------- */
@@ -362,15 +392,17 @@ document.addEventListener('click', ev => {
   switch (a) {
     case 'prev': { const x = fromKey(date); x.setDate(x.getDate() - 1); date = dkey(x); render(); break; }
     case 'next': { const x = fromKey(date); x.setDate(x.getDate() + 1); if (dkey(x) <= today()) date = dkey(x); render(); break; }
+    case 'hab': toggleHab(d.id); break;
+    case 'scale': SET.scale = !SET.scale; saveSet(); render(); break;
     case 'goal': openGoal = openGoal === d.k ? null : d.k; render(); break;
     case 'goto': date = d.k; tab = 'hoy'; render(); window.scrollTo(0, 0); break;
     case 'copy-prev': { const pk = prevDay(); if (pk) { LOG[pk].forEach(e => addEntry(e.food, e.g, date, true)); render(); toast('Copiado: ' + dlabel(pk)); } break; }
     case 'close-sheet': closeSheet(); break;
     case 'cat': sheet.cat = d.c; renderSheet(); break;
     case 'pick': pickFood(d.id); break;
-    case 'quick': { const f = food(d.id); addEntry(d.id, usualG(f)); renderSheet(); break; }
+    case 'quick': { const f = food(d.id); addEntry(d.id, quickG(f)); renderSheet(); break; }
     case 'back': if (sheet.from) { sheet = sheet.from; renderSheet(); } else closeSheet(); break;
-    case 'unit': { const i = +d.i, f = food(sheet.food), g = sheet._grams, u = f.portions[i]; sheet.unit = i; sheet.qty = i >= 0 ? rnd(g / u.perUnit, 2) : rnd(g, 1); renderSheet(); break; }
+    case 'unit': { const i = +d.i, f = food(sheet.food), g = sheet._grams, u = f.portions[i]; sheet.unit = i; sheet.blank = false; sheet.qty = i >= 0 ? 1 : rnd(g, 1); renderSheet(); break; }
     case 'setg': sheet.qty = +d.g; renderSheet(); break;
     case 'step': { sheet.qty = Math.max(0, rnd(sheet.qty + (+d.d) * sheet._step, 2)); renderSheet(); break; }
     case 'add': { if (sheet._grams > 0) { addEntry(sheet.food, sheet._grams); if (sheet.from) { sheet = sheet.from; renderSheet(); } else closeSheet(); } break; }
@@ -403,7 +435,7 @@ $('#xlsxIn').onchange = async e => {
     nd.goals.forEach(g => { const o = DATA.goals.find(x => x.key === g.key); if (!o) changed.push('Nuevo objetivo: ' + g.short); else if (o.min !== g.min || o.max !== g.max) changed.push(g.short + ': ' + (o.min ?? '–') + (o.max != null ? '–' + o.max : '') + ' → ' + (g.min ?? '–') + (g.max != null ? '–' + g.max : '')); });
     DATA.goals.forEach(o => { if (!nd.goals.find(g => g.key === o.key)) changed.push('Objetivo quitado: ' + o.short); });
     const newNut = nd.nutrients.filter(n => !DATA.nutrients.find(o => o.key === n.key)).map(n => n.short);
-    DATA = nd; store.set('nutri.data', DATA); indexFoods(); render();
+    if (!(nd.habits || []).length) nd.habits = DATA.habits || []; DATA = nd; store.set('nutri.data', DATA); indexFoods(); render();
     const li = x => x.length ? '<ul class="diff">' + x.slice(0, 8).map(i => '<li>' + esc(i) + '</li>').join('') + (x.length > 8 ? '<li>y ' + (x.length - 8) + ' más…</li>' : '') + '</ul>' : '';
     const box = $('#diff');
     if (box) box.innerHTML = '<p style="margin:12px 0 0"><b>Actualizado.</b> ' + nd.foods.length + ' alimentos, ' + nd.goals.length + ' objetivos.</p>' +
@@ -415,7 +447,7 @@ $('#xlsxIn').onchange = async e => {
 
 /* ---------- copia de seguridad ---------- */
 function exportLog() {
-  const blob = new Blob([JSON.stringify({ app: 'mi-nutricion', exported: new Date().toISOString(), log: LOG }, null, 1)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ app: 'mi-nutricion', exported: new Date().toISOString(), log: LOG, hab: HAB }, null, 1)], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'mi-nutricion-' + today() + '.json'; document.body.appendChild(a); a.click(); a.remove(); SET.backup = new Date().toISOString(); saveSet(); setTimeout(render, 300);
 }
 $('#jsonIn').onchange = async e => {
@@ -423,7 +455,7 @@ $('#jsonIn').onchange = async e => {
   try {
     const j = JSON.parse(await file.text()); if (!j.log) throw new Error('no parece una copia de Mi Nutrición');
     let n = 0; Object.keys(j.log).forEach(k => { const have = new Set((LOG[k] || []).map(x => x.id)); j.log[k].forEach(x => { if (!have.has(x.id)) { (LOG[k] = LOG[k] || []).push(x); n++; } }); });
-    saveLog(); render(); toast('Importados ' + n + ' registros');
+    Object.keys(j.hab || {}).forEach(k => { HAB[k] = Object.assign({}, j.hab[k], HAB[k] || {}); }); saveLog(); saveHab(); render(); toast('Importados ' + n + ' registros');
   } catch (err) { toast('No pude importar: ' + err.message); }
 };
 
@@ -437,7 +469,8 @@ render();
     SET.shown = today(); saveSet();
     const t = totals(entriesOf(today())), pend = DATA.goals.filter(g => g.min != null && (t[g.key] || 0) < g.min);
     setTimeout(() => window.scrollTo(0, 0), 0);
-    if (pend.length) toast('Pasadas las 4 PM · te faltan ' + pend.length + ' objetivos. Mira las sugerencias arriba.');
+    const hp = habitsOn(today()).filter(x => !habDone(today(), x.id));
+    if (pend.length || hp.length) toast('Pasadas las 4 PM' + (pend.length ? ' · te faltan ' + pend.length + ' objetivos de nutrición' : '') + (hp.length ? ' · pendientes: ' + hp.map(x => x.name).join(', ') : ''));
   }
 })();
 
@@ -489,9 +522,16 @@ function addByText(text) {
   try {
     const q = new URLSearchParams(location.search).get('add');
     if (q) { tab = 'hoy'; setTimeout(() => addByText(q), 50); history.replaceState(null, '', location.pathname); }
+    const hq = new URLSearchParams(location.search).get('hecho');
+    if (hq) { tab = 'hoy'; history.replaceState(null, '', location.pathname); setTimeout(() => {
+      const ws = NutriExcel.norm(hq).split(/\s+/).filter(w => w.length > 2 && !STOP.has(w));
+      const hit = (DATA.habits || []).find(h => NutriExcel.norm(h.name).split(/\s+/).some(n => ws.some(w => sim(w, n))));
+      if (hit) { if (!habDone(today(), hit.id)) toggleHab(hit.id, today()); date = today(); render(); toast('✓ ' + (hit.emoji ? hit.emoji + ' ' : '') + hit.name + ' hecho'); }
+      else toast('No encontré ese hábito en tu Excel');
+    }, 60); }
   } catch (e) {}
 })();
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
-window.__app = { addByText, get DATA() { return DATA; }, get LOG() { return LOG; }, totals, suggest, entriesOf, addEntry };
+window.__app = { addByText, toggleHab, habitsOn,  get DATA() { return DATA; }, get LOG() { return LOG; }, totals, suggest, entriesOf, addEntry };
 })();

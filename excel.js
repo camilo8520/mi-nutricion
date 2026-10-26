@@ -108,7 +108,22 @@
       goals.push({ key: n.key, label: n.label, short: n.short, unit: n.unit, group,
         min: num(r[2]), max: num(r[3]), why: r[6] ? String(r[6]) : '' });
     }
-    return { version: 1, nutrients: nutrients.map(({ col, ...n }) => n), foods, goals, importedAt: new Date().toISOString() };
+
+    // Hábitos del día (hoja opcional «Hábitos»)
+    const DIAS = { lun: 1, mar: 2, mie: 3, jue: 4, vie: 5, sab: 6, dom: 0 };
+    const habits = [];
+    const hn = Object.keys(wb.Sheets).find(n => norm(n) === 'habitos');
+    if (hn) {
+      const rowsH = XLSX.utils.sheet_to_json(wb.Sheets[hn], { header: 1, defval: null });
+      const hh = rowsH.findIndex(r => r && norm(r[0]) === 'habito');
+      if (hh >= 0) rowsH.slice(hh + 1).forEach(r => {
+        if (!r || !r[0] || !String(r[0]).trim()) return;
+        const dt = norm(r[3]); let days = null;
+        if (dt && !/todos|diario|cada/.test(dt)) { days = []; dt.split(/[^a-z]+/).forEach(t => { const k = Object.keys(DIAS).find(d => t.startsWith(d)); if (k != null && !days.includes(DIAS[k])) days.push(DIAS[k]); }); if (!days.length) days = null; }
+        habits.push({ id: String(r[0]).trim(), name: String(r[0]).trim(), emoji: r[1] ? String(r[1]).trim() : '', note: r[2] ? String(r[2]).trim() : '', days });
+      });
+    }
+    return { version: 1, habits, nutrients: nutrients.map(({ col, ...n }) => n), foods, goals, importedAt: new Date().toISOString() };
   }
 
   const api = { parseWorkbook, parseName, norm };
