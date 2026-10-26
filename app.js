@@ -1,5 +1,6 @@
 (function () {
 'use strict';
+const APP_VERSION = 5;
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const store = {
@@ -311,12 +312,12 @@ function viewHist() {
 function viewAjustes() {
   const d = new Date(DATA.importedAt);
   const demo = DATA === window.DATOS_INICIALES;
-  return '<section class="card set"><h3>Datos del Excel</h3><p>' + DATA.foods.length + ' alimentos · ' + DATA.nutrients.length + ' nutrientes · ' + DATA.goals.length + ' objetivos' + ((DATA.habits || []).length ? ' · ' + DATA.habits.length + ' hábitos' : '') + '.<br>' + (demo ? 'Datos incluidos con la app.' : 'Actualizado el ' + esc(dlabel(dkey(d))) + ' a las ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0')) + '</p>' +
+  return '<section class="card set"><h3>Datos del Excel</h3><p class="tiny" style="margin:-2px 0 8px">Versión de la app: ' + APP_VERSION + '</p><p>' + DATA.foods.length + ' alimentos · ' + DATA.nutrients.length + ' nutrientes · ' + DATA.goals.length + ' objetivos' + ((DATA.habits || []).length ? ' · ' + DATA.habits.length + ' hábitos' : '') + '.<br>' + (demo ? 'Datos incluidos con la app.' : 'Actualizado el ' + esc(dlabel(dkey(d))) + ' a las ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0')) + '</p>' +
     '<button class="btn block" data-act="pick-xlsx">Actualizar desde el Excel</button>' +
     '<ol class="how" style="margin-top:12px"><li>Edita <b>Calculadora_Nutricion_Camilo.xlsx</b> y guarda.</li><li>Toca el botón y elige el archivo desde OneDrive.</li><li>Listo: alimentos, medidas, nutrientes y metas se actualizan. Tu registro no se toca.</li></ol><div id="diff"></div></section>' +
     '<section class="card set"><h3>Modo báscula</h3><p>Al elegir un alimento, la app abre directo en gramos con el teclado listo para que escribas lo que marca tu báscula.</p><div class="seg"><button data-act="scale" class="' + (SET.scale ? '' : 'on') + '">Apagado</button><button data-act="scale" class="' + (SET.scale ? 'on' : '') + '">Encendido</button></div></section>' +
     '<section class="card set"><h3>Apariencia</h3><div class="seg" style="margin-top:8px">' + [['auto', 'Automática'], ['light', 'Clara'], ['dark', 'Oscura']].map(([v, l]) => '<button data-act="theme" data-v="' + v + '" class="' + (SET.theme === v ? 'on' : '') + '">' + l + '</button>').join('') + '</div></section>' +
-    '<section class="card set"><h3>Aviso de las 4 PM</h3><p>Después de las 4:00 PM la app te muestra qué te falta para cerrar el día. Para que el iPhone te avise solo: en la app Atajos crea una automatización «Hora del día · 4:00 PM» con la acción «Abrir app» (Mi Nutrición).</p></section>' +
+    '<section class="card set"><h3>Aviso de las 4 PM</h3><p>Después de las 4:00 PM la app te muestra qué te falta para cerrar el día. Para que el iPhone te avise solo: crea un recordatorio en la app Recordatorios, todos los días a las 4:00 PM, que diga «Abrir Mi Nutrición».</p></section>' +
     '<section class="card set"><h3>Copia de seguridad</h3><p>Tu registro vive en este teléfono. ' + (SET.backup ? 'Última copia: ' + esc(dlabel(dkey(new Date(SET.backup)))) + '.' : 'Aún no has guardado ninguna copia.') + '</p><div class="btnrow" style="margin:0;justify-content:flex-start"><button class="btn ghost" data-act="export">Exportar registro</button><button class="btn ghost" data-act="pick-json">Importar copia</button></div></section>';
 }
 
@@ -392,6 +393,7 @@ document.addEventListener('click', ev => {
   switch (a) {
     case 'prev': { const x = fromKey(date); x.setDate(x.getDate() - 1); date = dkey(x); render(); break; }
     case 'next': { const x = fromKey(date); x.setDate(x.getDate() + 1); if (dkey(x) <= today()) date = dkey(x); render(); break; }
+    case 'gohoy': tab = 'hoy'; render(); window.scrollTo(0, 0); break;
     case 'hab': toggleHab(d.id); break;
     case 'scale': SET.scale = !SET.scale; saveSet(); render(); break;
     case 'goal': openGoal = openGoal === d.k ? null : d.k; render(); break;
@@ -435,13 +437,15 @@ $('#xlsxIn').onchange = async e => {
     nd.goals.forEach(g => { const o = DATA.goals.find(x => x.key === g.key); if (!o) changed.push('Nuevo objetivo: ' + g.short); else if (o.min !== g.min || o.max !== g.max) changed.push(g.short + ': ' + (o.min ?? '–') + (o.max != null ? '–' + o.max : '') + ' → ' + (g.min ?? '–') + (g.max != null ? '–' + g.max : '')); });
     DATA.goals.forEach(o => { if (!nd.goals.find(g => g.key === o.key)) changed.push('Objetivo quitado: ' + o.short); });
     const newNut = nd.nutrients.filter(n => !DATA.nutrients.find(o => o.key === n.key)).map(n => n.short);
-    if (!(nd.habits || []).length) nd.habits = DATA.habits || []; DATA = nd; store.set('nutri.data', DATA); indexFoods(); render();
+    const oldH = (DATA.habits || []).map(x => x.name); const hasHabSheet = wb.SheetNames.some(n => NutriExcel.norm(n) === 'habitos'); if (!(nd.habits || []).length) nd.habits = DATA.habits || []; const hnew = (nd.habits || []).map(x => x.name).filter(n => !oldH.includes(n));
+    const sheets = wb.SheetNames.join(', '); const mod = file.lastModified ? new Date(file.lastModified) : null;
+    DATA = nd; store.set('nutri.data', DATA); indexFoods(); render();
     const li = x => x.length ? '<ul class="diff">' + x.slice(0, 8).map(i => '<li>' + esc(i) + '</li>').join('') + (x.length > 8 ? '<li>y ' + (x.length - 8) + ' más…</li>' : '') + '</ul>' : '';
     const box = $('#diff');
-    if (box) box.innerHTML = '<p style="margin:12px 0 0"><b>Actualizado.</b> ' + nd.foods.length + ' alimentos, ' + nd.goals.length + ' objetivos.</p>' +
+    if (box) box.innerHTML = '<p style="margin:12px 0 0"><b>Actualizado.</b> ' + nd.foods.length + ' alimentos, ' + nd.goals.length + ' objetivos, ' + (nd.habits || []).length + ' hábitos.</p><p class="tiny" style="margin:4px 0 0">Archivo: ' + esc(file.name) + (mod ? ' · guardado el ' + esc(dlabel(dkey(mod))) + ' a las ' + mod.getHours() + ':' + String(mod.getMinutes()).padStart(2, '0') : '') + '<br>Hojas que leí: ' + esc(sheets) + '</p>' + (!hasHabSheet ? '<p style="margin:8px 0 0;color:var(--warn);font-weight:650">Este archivo no tiene la hoja «Hábitos». Si tu Excel ya la tiene, el teléfono todavía tiene una copia vieja: abre OneDrive, espera a que sincronice y vuelve a elegirlo.</p>' : '') + (hnew.length ? '<p class="tiny" style="margin:6px 0 0">Hábitos nuevos</p>' + li(hnew) : '') +
       (added.length ? '<p class="tiny" style="margin:6px 0 0">Alimentos nuevos</p>' + li(added) : '') + (removed.length ? '<p class="tiny" style="margin:6px 0 0">Ya no están (tus registros viejos se conservan)</p>' + li(removed) : '') +
       (newNut.length ? '<p class="tiny" style="margin:6px 0 0">Nutrientes nuevos</p>' + li(newNut) : '') + (changed.length ? '<p class="tiny" style="margin:6px 0 0">Metas que cambiaron</p>' + li(changed) : '') +
-      (!added.length && !removed.length && !changed.length && !newNut.length ? '<p class="tiny">No hubo cambios en alimentos ni metas (los valores nutricionales sí se refrescaron).</p>' : '');
+      (!added.length && !removed.length && !changed.length && !newNut.length ? '<p class="tiny">No hubo cambios en alimentos ni metas (los valores nutricionales sí se refrescaron).</p>' : '') + '<div class="btnrow" style="justify-content:flex-start"><button class="btn" data-act="gohoy">Ver mi día</button></div>';
   } catch (err) { toast('No pude leer el Excel: ' + err.message); }
 };
 
@@ -532,6 +536,10 @@ function addByText(text) {
   } catch (e) {}
 })();
 
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  const had = !!navigator.serviceWorker.controller; let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !reloaded) { reloaded = true; location.reload(); } });
+  navigator.serviceWorker.register('sw.js').then(r => r.update()).catch(() => {});
+}
 window.__app = { addByText, toggleHab, habitsOn,  get DATA() { return DATA; }, get LOG() { return LOG; }, totals, suggest, entriesOf, addEntry };
 })();
