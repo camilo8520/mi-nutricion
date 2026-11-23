@@ -1,6 +1,6 @@
 (function () {
 'use strict';
-const APP_VERSION = 8;
+const APP_VERSION = 9;
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const store = {
