@@ -1,6 +1,6 @@
 (function () {
 'use strict';
-const APP_VERSION = 9;
+const APP_VERSION = 10;
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const store = {
@@ -17,7 +17,8 @@ const ICON = {
 };
 
 /* ---------- estado ---------- */
-let DATA = store.get('nutri.data', null) || window.DATOS_INICIALES;
+const _sd = store.get('nutri.data', null);
+let DATA = (_sd && (!window.DATOS_INICIALES.importedAt || (_sd.importedAt || '') >= window.DATOS_INICIALES.importedAt)) ? _sd : window.DATOS_INICIALES;
 if (!(DATA.habits || []).length) DATA.habits = window.DATOS_INICIALES.habits || [];
 let LOG = store.get('nutri.log', {});
 let ARCH = store.get('nutri.archive', {});
@@ -279,7 +280,13 @@ function viewHoy() {
     if (prev && date === today()) h += '<div class="btnrow"><button class="linkbtn" data-act="copy-prev">+ Copiar lo de ' + esc(dlabel(prev)) + '</button></div>';
   }
   h += '</section>';
+  h += motivCard();
   return h;
+}
+const FRASES = ['Tu mejor versión se construye hoy, comida por comida.', 'Sé juicioso: lo que haces cada día es lo que te transforma.', 'La constancia le gana al talento. Sigue con tu plan.', 'Cada comida registrada es un paso hacia tu meta.', 'Tú ya sabes de lo que eres capaz. Sigue así.', 'Come bien, entrena duro, descansa. Repite.', 'No tiene que ser perfecto, tiene que ser constante.'];
+function motivCard() {
+  const fr = FRASES[Math.floor(Date.now() / 864e5) % FRASES.length];
+  return '<section class="motiv"><img src="foto.jpg" alt="Camilo, tu mejor versión" width="340" height="340" loading="lazy"><p>' + esc(fr) + '</p><span>💪 Constancia · Disciplina · Resultados</span></section>';
 }
 function prevDay() { const ks = Object.keys(LOG).filter(k => k < date).sort(); return ks.length ? ks[ks.length - 1] : null; }
 
