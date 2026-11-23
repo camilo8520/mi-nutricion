@@ -43,6 +43,8 @@
     return { name: name || full, portions };
   }
 
+  // SheetJS mini corta los emojis de 4 bytes (&#128138;) a 16 bits; los reparamos.
+  const fixEmo = t => String(t == null ? '' : t).replace(/[\uF000-\uFDFF]/g, c => String.fromCodePoint(c.charCodeAt(0) + 0x10000)).trim();
   function parseWorkbook(XLSX, wb) {
     const wsB = wb.Sheets['Base de datos'];
     if (!wsB) throw new Error('No encuentro la hoja «Base de datos».');
@@ -68,7 +70,7 @@
       const p = parseName(full);
       const per100 = {};
       nutrients.forEach(n => { per100[n.key] = num(row[n.col]) || 0; });
-      foods.push({ id: full, name: p.name, emoji: emoCol >= 0 && row[emoCol] ? String(row[emoCol]).trim() : '', portions: p.portions, per100, source: srcCol >= 0 && row[srcCol] ? String(row[srcCol]) : '' });
+      foods.push({ id: full, name: p.name, emoji: emoCol >= 0 && row[emoCol] ? fixEmo(row[emoCol]) : '', portions: p.portions, per100, source: srcCol >= 0 && row[srcCol] ? String(row[srcCol]) : '' });
     }
 
     // Categorías y orden: hoja «Mi día» (filas «▸ …»)
@@ -120,7 +122,7 @@
         if (!r || !r[0] || !String(r[0]).trim()) return;
         const dt = norm(r[3]); let days = null;
         if (dt && !/todos|diario|cada/.test(dt)) { days = []; dt.split(/[^a-z]+/).forEach(t => { const k = Object.keys(DIAS).find(d => t.startsWith(d)); if (k != null && !days.includes(DIAS[k])) days.push(DIAS[k]); }); if (!days.length) days = null; }
-        habits.push({ id: String(r[0]).trim(), name: String(r[0]).trim(), emoji: r[1] ? String(r[1]).trim() : '', note: r[2] ? String(r[2]).trim() : '', days });
+        habits.push({ id: String(r[0]).trim(), name: String(r[0]).trim(), emoji: r[1] ? fixEmo(r[1]) : '', note: r[2] ? String(r[2]).trim() : '', days });
       });
     }
     return { version: 1, habits, nutrients: nutrients.map(({ col, ...n }) => n), foods, goals, importedAt: new Date().toISOString() };

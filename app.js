@@ -1,6 +1,6 @@
 (function () {
 'use strict';
-const APP_VERSION = 7;
+const APP_VERSION = 8;
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const store = {
@@ -18,6 +18,7 @@ const ICON = {
 
 /* ---------- estado ---------- */
 let DATA = store.get('nutri.data', null) || window.DATOS_INICIALES;
+if (!(DATA.habits || []).length) DATA.habits = window.DATOS_INICIALES.habits || [];
 let LOG = store.get('nutri.log', {});
 let ARCH = store.get('nutri.archive', {});
 let SET = store.get('nutri.set', { theme: 'auto', shown: '' });
